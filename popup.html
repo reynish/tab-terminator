@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Tab Terminator</title>
+  <link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+  <h1>Tab Terminator</h1>
+  <form id="settings-form">
+    <label for="minutes">Close tabs older than (minutes):</label>
+    <input type="number" id="minutes" name="minutes" min="1" value="60">
+    <button type="submit">Save</button>
+  </form>
+
+  <hr>
+
+  <button id="close-tabs-now">Close Tabs Now</button>
+
+  <hr>
+
+  <h2>Whitelist</h2>
+  <ul id="whitelist"></ul>
+  <button id="add-to-whitelist">Whitelist Current Site</button>
+
+  <script src="popup.js"></script>
+</body>
+</html>

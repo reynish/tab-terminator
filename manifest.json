@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "Tab Terminator",
+  "version": "1.0",
+  "description": "A Chrome extension that automatically closes tabs that have not been accessed for a specified amount of time.",
+  "permissions": [
+    "tabs",
+    "storage"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html"
+  }
+}
