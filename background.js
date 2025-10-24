@@ -27,6 +27,7 @@ chrome.windows.onFocusChanged.addListener((windowId) => {
 });
 
 function checkTabs() {
+  console.info('Running checkTabs...');
   chrome.storage.sync.get(['minutes', 'whitelist'], (result) => {
     const minutes = result.minutes || 60;
     const whitelist = result.whitelist || [];
@@ -36,17 +37,42 @@ function checkTabs() {
       const accessTimes = storedAccessTimes.tabAccessTimes || {};
       chrome.tabs.query({}, (tabs) => {
         tabs.forEach((tab) => {
+          // Skip pinned tabs
+          if (tab.pinned) {
+            console.info(`Tab ${tab.id} - ${tab.title} is pinned. Skipping.`);
+            return;
+          }
+
+          const lastAccessed = accessTimes[tab.id];
+          if (!lastAccessed) {
+            console.warn(`Tab ${tab.id} - ${tab.title} has no lastAccessed time recorded. Skipping.`);
+            return;
+          }
+
+          const ageMilliseconds = Date.now() - lastAccessed;
+          const ageMinutes = Math.floor(ageMilliseconds / (1000 * 60));
+          const minutesUntilClose = minutes - ageMinutes;
+
           if (tab.url) {
-            const url = new URL(tab.url);
-            const domain = url.hostname;
-            if (whitelist.includes(domain)) {
-              return;
+            try {
+              const url = new URL(tab.url);
+              const domain = url.hostname;
+              if (whitelist.includes(domain)) {
+                console.info(`Tab ${tab.id} - ${tab.title} (${domain}) is whitelisted. Age: ${ageMinutes} minutes.`);
+                return;
+              }
+            } catch (e) {
+              console.error(`Error parsing URL for tab ${tab.id} - ${tab.title}: ${e.message}`);
             }
           }
 
-          const lastAccessed = accessTimes[tab.id] || tab.lastAccessed;
           if (lastAccessed < threshold) {
+            console.info(`Closing tab ${tab.id} - ${tab.title}. Age: ${ageMinutes} minutes.`);
             chrome.tabs.remove(tab.id);
+          } else if (minutesUntilClose <= 5) {
+            console.warn(`Tab ${tab.id} - ${tab.title} will close in ${minutesUntilClose} minutes. Age: ${ageMinutes} minutes.`);
+          } else {
+            console.info(`Tab ${tab.id} - ${tab.title}. Age: ${ageMinutes} minutes. Closes in ${minutesUntilClose} minutes.`);
           }
         });
       });
@@ -71,6 +97,15 @@ chrome.runtime.onStartup.addListener(() => {
     Object.assign(tabAccessTimes, result.tabAccessTimes || {});
     checkTabs();
   });
+});
+
+// Listen for messages from the popup to trigger manual tab closing
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
+  if (request.action === 'closeTabsNow') {
+    console.info('Manual tab closing triggered from popup.');
+    clearTimeout(timeout); // Stop the current timeout to avoid double-checking
+    checkTabs();
+  }
 });
 
 // Stop the checker when the extension is uninstalled
