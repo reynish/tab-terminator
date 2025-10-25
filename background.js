@@ -43,6 +43,13 @@ function checkTabs() {
             return;
           }
 
+          // Skip tabs that are in a tab group
+          // tab.groupId is -1 when not grouped; ensure it's a number before comparing
+          if (typeof tab.groupId === 'number' && tab.groupId !== -1) {
+            console.info(`Tab ${tab.id} - ${tab.title} is in group ${tab.groupId}. Skipping.`);
+            return;
+          }
+
           const lastAccessed = accessTimes[tab.id];
           if (!lastAccessed) {
             console.warn(`Tab ${tab.id} - ${tab.title} has no lastAccessed time recorded. Skipping.`);
