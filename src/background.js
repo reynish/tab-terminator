@@ -1,9 +1,14 @@
-let timeout;
-const tabAccessTimes = {};
+const CHECK_ALARM = 'checkTabs';
 
+// MV3 service workers are killed after ~30s of inactivity, so access times must
+// always be read-modify-written against storage: an in-memory cache would be
+// lost on every worker restart and wipe out the other tabs' timestamps.
 function updateAccessTime(tabId) {
-  tabAccessTimes[tabId] = Date.now();
-  chrome.storage.local.set({ tabAccessTimes });
+  chrome.storage.local.get(['tabAccessTimes'], (result) => {
+    const accessTimes = result.tabAccessTimes || {};
+    accessTimes[tabId] = Date.now();
+    chrome.storage.local.set({ tabAccessTimes: accessTimes });
+  });
 }
 
 chrome.tabs.onActivated.addListener((activeInfo) => {
@@ -82,40 +87,46 @@ function checkTabs() {
             console.info(`Tab ${tab.id} - ${tab.title}. Age: ${ageMinutes} minutes. Closes in ${minutesUntilClose} minutes.`);
           }
         });
+
+        // Drop access times for tabs that no longer exist so storage doesn't
+        // accumulate stale entries forever.
+        const openTabIds = new Set(tabs.map((tab) => tab.id));
+        const staleIds = Object.keys(accessTimes)
+          .map(Number)
+          .filter((id) => !openTabIds.has(id));
+        if (staleIds.length > 0) {
+          staleIds.forEach((id) => delete accessTimes[id]);
+          chrome.storage.local.set({ tabAccessTimes: accessTimes });
+          console.info(`Removed ${staleIds.length} stale access time entries.`);
+        }
       });
     });
   });
-
-  // Schedule the next check
-  timeout = setTimeout(checkTabs, 60 * 1000); // Check every minute
 }
 
-// Start the checker when the extension is installed or updated
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.local.get(['tabAccessTimes'], (result) => {
-    Object.assign(tabAccessTimes, result.tabAccessTimes || {});
-    checkTabs();
-  });
-});
-
-// Start the checker when Chrome starts
-chrome.runtime.onStartup.addListener(() => {
-  chrome.storage.local.get(['tabAccessTimes'], (result) => {
-    Object.assign(tabAccessTimes, result.tabAccessTimes || {});
-    checkTabs();
-  });
-});
-
-// Listen for messages from the popup to trigger manual tab closing
-chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
-  if (request.action === 'closeTabsNow') {
-    console.info('Manual tab closing triggered from popup.');
-    clearTimeout(timeout); // Stop the current timeout to avoid double-checking
+// The alarm persists across service worker restarts, so it wakes the worker to
+// run each check instead of relying on a setTimeout that dies with the worker.
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === CHECK_ALARM) {
     checkTabs();
   }
 });
 
-// Stop the checker when the extension is uninstalled
-chrome.runtime.onSuspend.addListener(() => {
-  clearTimeout(timeout);
+function startChecker() {
+  chrome.alarms.create(CHECK_ALARM, { periodInMinutes: 1 });
+  checkTabs();
+}
+
+// Start the checker when the extension is installed or updated
+chrome.runtime.onInstalled.addListener(startChecker);
+
+// Start the checker when Chrome starts
+chrome.runtime.onStartup.addListener(startChecker);
+
+// Listen for messages from the popup to trigger manual tab closing
+chrome.runtime.onMessage.addListener((request) => {
+  if (request.action === 'closeTabsNow') {
+    console.info('Manual tab closing triggered from popup.');
+    checkTabs();
+  }
 });
