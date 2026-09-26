@@ -1,0 +1,14 @@
+{
+    "name": "tab-terminator",
+    "version": "1.0.0",
+    "private": true,
+    "type": "module",
+    "description": "A Chrome extension that automatically closes tabs that have not been accessed for a specified amount of time.",
+    "scripts": {
+        "test": "tap",
+        "build": "rm -f tab-terminator.zip && cd src && zip -r ../tab-terminator.zip ."
+    },
+    "devDependencies": {
+        "tap": "^21.1.0"
+    }
+}

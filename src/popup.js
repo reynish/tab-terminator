@@ -1,3 +1,5 @@
+import { extractDomain } from './lib/terminate.js';
+
 document.addEventListener('DOMContentLoaded', () => {
   const form = document.getElementById('settings-form');
   const minutesInput = document.getElementById('minutes');
@@ -46,9 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
   addToWhitelistBtn.addEventListener('click', () => {
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
       if (tabs.length > 0) {
-        const url = new URL(tabs[0].url);
-        const domain = url.hostname;
-        if (!whitelist.includes(domain)) {
+        const domain = extractDomain(tabs[0].url);
+        if (domain !== null && !whitelist.includes(domain)) {
           whitelist.push(domain);
           chrome.storage.sync.set({ whitelist });
           renderWhitelist();

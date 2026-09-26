@@ -1,0 +1,38 @@
+# Publishes the extension to the Chrome Web Store.
+#
+# Requires these repository secrets (see README "Publishing" for how to get them):
+#   CHROME_EXTENSION_ID
+#   CHROME_CLIENT_ID
+#   CHROME_CLIENT_SECRET
+#   CHROME_REFRESH_TOKEN
+#
+# The Web Store rejects uploads of an unchanged version, so bump "version"
+# in src/manifest.json before publishing.
+name: Publish to Chrome Web Store
+
+on:
+  workflow_dispatch:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Package extension
+        run: npm run build
+      - name: Upload to Chrome Web Store
+        run: npx chrome-webstore-upload-cli@^3 upload --source tab-terminator.zip
+        env:
+          EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}
+      - name: Publish uploaded version
+        run: npx chrome-webstore-upload-cli@^3 publish
+        env:
+          EXTENSION_ID: ${{ secrets.CHROME_EXTENSION_ID }}
+          CLIENT_ID: ${{ secrets.CHROME_CLIENT_ID }}
+          CLIENT_SECRET: ${{ secrets.CHROME_CLIENT_SECRET }}
+          REFRESH_TOKEN: ${{ secrets.CHROME_REFRESH_TOKEN }}

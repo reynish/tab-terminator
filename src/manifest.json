@@ -5,7 +5,8 @@
     "description": "A Chrome extension that automatically closes tabs that have not been accessed for a specified amount of time.",
     "permissions": ["alarms", "tabs", "storage"],
     "background": {
-        "service_worker": "background.js"
+        "service_worker": "background.js",
+        "type": "module"
     },
     "action": {
         "default_popup": "popup.html"

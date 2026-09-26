@@ -1,3 +1,5 @@
+import { classifyTab } from './lib/terminate.js';
+
 const CHECK_ALARM = 'checkTabs';
 
 // MV3 service workers are killed after ~30s of inactivity, so access times must
@@ -36,55 +38,48 @@ function checkTabs() {
   chrome.storage.sync.get(['minutes', 'whitelist'], (result) => {
     const minutes = result.minutes || 60;
     const whitelist = result.whitelist || [];
-    const threshold = Date.now() - (minutes * 60 * 1000);
+    const now = Date.now();
 
     chrome.storage.local.get(['tabAccessTimes'], (storedAccessTimes) => {
       const accessTimes = storedAccessTimes.tabAccessTimes || {};
       chrome.tabs.query({}, (tabs) => {
         tabs.forEach((tab) => {
-          // Skip pinned tabs
-          if (tab.pinned) {
-            console.info(`Tab ${tab.id} - ${tab.title} is pinned. Skipping.`);
-            return;
+          const decision = classifyTab(tab, {
+            accessTime: accessTimes[tab.id],
+            now,
+            minutes,
+            whitelist,
+          });
+
+          if (decision.urlError) {
+            console.error(`Error parsing URL for tab ${tab.id} - ${tab.title}: ${decision.urlError}`);
           }
 
-          // Skip tabs that are in a tab group
-          // tab.groupId is -1 when not grouped; ensure it's a number before comparing
-          if (typeof tab.groupId === 'number' && tab.groupId !== -1) {
-            console.info(`Tab ${tab.id} - ${tab.title} is in group ${tab.groupId}. Skipping.`);
-            return;
-          }
-
-          const lastAccessed = accessTimes[tab.id];
-          if (!lastAccessed) {
-            console.warn(`Tab ${tab.id} - ${tab.title} has no lastAccessed time recorded. Skipping.`);
-            return;
-          }
-
-          const ageMilliseconds = Date.now() - lastAccessed;
-          const ageMinutes = Math.floor(ageMilliseconds / (1000 * 60));
-          const minutesUntilClose = minutes - ageMinutes;
-
-          if (tab.url) {
-            try {
-              const url = new URL(tab.url);
-              const domain = url.hostname;
-              if (whitelist.includes(domain)) {
-                console.info(`Tab ${tab.id} - ${tab.title} (${domain}) is whitelisted. Age: ${ageMinutes} minutes.`);
-                return;
-              }
-            } catch (e) {
-              console.error(`Error parsing URL for tab ${tab.id} - ${tab.title}: ${e.message}`);
-            }
-          }
-
-          if (lastAccessed < threshold) {
-            console.info(`Closing tab ${tab.id} - ${tab.title}. Age: ${ageMinutes} minutes.`);
+          if (decision.action === 'close') {
+            console.info(`Closing tab ${tab.id} - ${tab.title}. Age: ${decision.ageMinutes} minutes.`);
             chrome.tabs.remove(tab.id);
-          } else if (minutesUntilClose <= 5) {
-            console.warn(`Tab ${tab.id} - ${tab.title} will close in ${minutesUntilClose} minutes. Age: ${ageMinutes} minutes.`);
-          } else {
-            console.info(`Tab ${tab.id} - ${tab.title}. Age: ${ageMinutes} minutes. Closes in ${minutesUntilClose} minutes.`);
+            return;
+          }
+
+          switch (decision.reason) {
+            case 'pinned':
+              console.info(`Tab ${tab.id} - ${tab.title} is pinned. Skipping.`);
+              break;
+            case 'grouped':
+              console.info(`Tab ${tab.id} - ${tab.title} is in group ${tab.groupId}. Skipping.`);
+              break;
+            case 'untracked':
+              console.warn(`Tab ${tab.id} - ${tab.title} has no lastAccessed time recorded. Skipping.`);
+              break;
+            case 'whitelisted':
+              console.info(`Tab ${tab.id} - ${tab.title} (${decision.domain}) is whitelisted. Age: ${decision.ageMinutes} minutes.`);
+              break;
+            default: // 'active'
+              if (decision.minutesUntilClose <= 5) {
+                console.warn(`Tab ${tab.id} - ${tab.title} will close in ${decision.minutesUntilClose} minutes. Age: ${decision.ageMinutes} minutes.`);
+              } else {
+                console.info(`Tab ${tab.id} - ${tab.title}. Age: ${decision.ageMinutes} minutes. Closes in ${decision.minutesUntilClose} minutes.`);
+              }
           }
         });
 
