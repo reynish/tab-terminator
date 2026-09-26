@@ -5,16 +5,14 @@
   <link rel="stylesheet" type="text/css" href="style.css">
 </head>
 <body>
-  <h1>Tab Terminator</h1>
+  <button id="close-tabs-now">Close Tabs Now</button>
+
   <form id="settings-form">
-    <label for="minutes">Close tabs older than (minutes):</label>
+    <label for="minutes">Close older than</label>
     <input type="number" id="minutes" name="minutes" min="1" value="60">
+    <span class="unit">minutes</span>
     <button type="submit">Save</button>
   </form>
-
-  <hr>
-
-  <button id="close-tabs-now">Close Tabs Now</button>
 
   <hr>
 
